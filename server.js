@@ -70,48 +70,25 @@ class TCPServer {
                 });
 
                 socket.on('text', (data) => {
-                    console.log('Text: ', data);
                     firebaseService.saveMessageIntoDB(data.chatId, currentUserId, data.text, data.type);
                 });
 
                 socket.on('addToGroupChat', (data) => {
-                    console.log('Add to group chat: ', data);
                     this.addToGroupChat(currentUserId, data.newUserIds, data.chatId);
                 });
 
                 socket.on('audio', (data) => {
-                    console.log('audio: ', data);
                     this.combineChunksOfAudio(data, audioChunksMap);
-                })
-
-                socket.on('dataFiles', (data) => {
-                    console.log('dataFiles: ', data);
-                    this.combineChunksOfDataFiles(socket, data, uploadDataFiles, data.type);
-                })
-
-                socket.on('callUser', (data) => {
-                    const usersSocketOfferedToCall = data.chatUserIds.map((userId) => {
-                        return this.users.get(userId);
-                    });
-                    usersSocketOfferedToCall.forEach((socket) => {
-                        if (socket) {
-                            console.log('send call-user');
-                            socket.emit('callUser', { response: data });
-                        }
-                    })
                 });
 
-                socket.on('answerCall', (data) => {
-                    const socketToAnswer = data.chatUserIds.map((userId) => {
-                        return this.users.get(userId);
-                    });
-                    socketToAnswer.forEach((socket) => {
-                        if (socket) {
-                            console.log('send answer-call');
-                            socket.emit('callAccepted', { response: data });
-                        }
-                    });
-                })
+                socket.on('dataFiles', (data) => {
+                    this.combineChunksOfDataFiles(socket, data, uploadDataFiles, data.type);
+                });
+
+                socket.on('updateDoc', (data) => {
+                    const { docId, content, changeBy } = data;
+                    firebaseService.updateDoc(docId, content, changeBy);
+                });
 
                 socket.on('disconnect', () => {
                     console.log('Client đã ngắt kết nối');
