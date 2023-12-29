@@ -121,6 +121,30 @@ class TCPServer {
                     firebaseService.updateDoc(docId, content, changeBy);
                 });
 
+                socket.on('callUser', (data) => {
+                    const usersSocketOfferedToCall = data.chatUserIds.map((userId) => {
+                        return this.users.get(userId);
+                    });
+                    usersSocketOfferedToCall.forEach((socket) => {
+                        if (socket) {
+                            console.log('send call-user');
+                            socket.emit('callUser', { response: data });
+                        }
+                    })
+                });
+
+                socket.on('answerCall', (data) => {
+                    const socketToAnswer = data.chatUserIds.map((userId) => {
+                        return this.users.get(userId);
+                    });
+                    socketToAnswer.forEach((socket) => {
+                        if (socket) {
+                            console.log('send answer-call');
+                            socket.emit('callAccepted', { response: data });
+                        }
+                    });
+                })
+
                 socket.on('disconnect', () => {
                     console.log('Client đã ngắt kết nối');
                     this.users.delete(currentUserId);
