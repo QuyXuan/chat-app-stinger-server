@@ -1,4 +1,5 @@
 const admin = require('firebase-admin');
+const uuid = require('uuid');
 const serviceAccount = require('../firebase-admin-key.json');
 const storageBucketName = 'chatappstinger.appspot.com';
 
@@ -68,13 +69,20 @@ class FirebaseService {
                 const chatRef = db.collection('chats').doc(chatId);
                 const messageCollection = chatRef.collection('messages');
                 const today = admin.firestore.FieldValue.serverTimestamp();
+                const messageId = uuid.v4();
 
                 await chatRef.update({
+                    fromUser: {
+                        userId: fromUserId,
+                        displayName: `${userDoc.data()['displayName']}`,
+                    },
+                    messageId: messageId,
                     lastMessage: `audio.xyz`,
-                    lastMessageDate: today
+                    lastMessageDate: today,
                 });
 
-                await messageCollection.add({
+                await messageCollection.doc(messageId).set({
+                    id: messageId,
                     senderId: fromUserId,
                     displayName: userDoc.data()['displayName'],
                     sentDate: today,
@@ -99,17 +107,20 @@ class FirebaseService {
             if (userDoc.exists) {
                 const chatRef = db.collection('chats').doc(chatId);
                 const messageCollection = chatRef.collection('messages');
+                const messageId = uuid.v4();
 
                 await chatRef.update({
                     fromUser: {
                         userId: fromUserId,
                         displayName: `${userDoc.data()['displayName']}`,
                     },
+                    messageId: messageId,
                     lastMessage: `had sent ${uploadDataFiles.length} ${type}(s).`,
-                    lastMessageDate: today
+                    lastMessageDate: today,
                 });
 
-                await messageCollection.add({
+                await messageCollection.doc(messageId).set({
+                    id: messageId,
                     senderId: fromUserId,
                     displayName: userDoc.data()['displayName'],
                     sentDate: today,
@@ -136,16 +147,19 @@ class FirebaseService {
                 const chatRef = db.collection('chats').doc(chatId);
                 const messageCollection = chatRef.collection('messages');
 
+                const messageId = uuid.v4();
                 batch.update(chatRef, {
                     fromUser: {
                         userId: fromUserId,
                         displayName: `${userDoc.data()['displayName']}`,
                     },
+                    messageId: messageId,
                     lastMessage: (type === 'link') ? 'link.xyz' : `: ${message.replaceAll('<br/>', '\n')}`,
                     lastMessageDate: today
                 });
 
-                batch.set(messageCollection.doc(), {
+                batch.set(messageCollection.doc(messageId), {
+                    id: messageId,
                     senderId: fromUserId,
                     displayName: userDoc.data()['displayName'],
                     sentDate: today,
@@ -211,6 +225,56 @@ class FirebaseService {
         }
         catch (e) {
             console.log('getUsersInChatRoom' + e.message);
+        }
+    }
+
+    async editMessageContent(chatId, messageId, newContent) {
+        try {
+            const db = admin.firestore();
+            const chatRef = db.collection('chats').doc(chatId);
+            const messageRef = chatRef.collection('messages').doc(messageId);
+
+            await db.runTransaction(async (transaction) => {
+                const chatDoc = await transaction.get(chatRef);
+                if (chatDoc.exists && chatDoc.data()['messageId'] === messageId) {
+                    transaction.update(chatRef, { lastMessage: `: ${newContent}` });
+                }
+
+                // Cập nhật thông tin của message
+                transaction.update(messageRef, {
+                    text: newContent,
+                    isEdited: true,
+                });
+            });
+            console.log('Message content updated successfully.');
+        } catch (error) {
+            console.log('editMessageContent: ', error.message);
+        }
+    }
+
+    async deleteMessage(chatId, messageId) {
+        try {
+            const db = admin.firestore();
+            const chatRef = db.collection('chats').doc(chatId);
+            const messageRef = chatRef.collection('messages').doc(messageId);
+
+            await db.runTransaction(async (transaction) => {
+                const chatDoc = await transaction.get(chatRef);
+                if (chatDoc.exists && chatDoc.data()['messageId'] === messageId) {
+                    transaction.update(chatRef, { lastMessage: `deleted a message` });
+                }
+
+                // Cập nhật thông tin của message
+                transaction.update(messageRef, {
+                    isEdited: false,
+                    isDeleted: true,
+                    text: 'This message is deleted',
+                    type: 'text'
+                });
+            });
+            console.log('Delete message successfully.');
+        } catch (error) {
+            console.log('deleteMessage: ', error.message);
         }
     }
 

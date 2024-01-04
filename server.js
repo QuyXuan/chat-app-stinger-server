@@ -1,7 +1,8 @@
 const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
-const firebaseService = require('./services/firebase.js');
+const FirebaseService = require('./services/firebase-service');
+const firebaseService = new FirebaseService();
 const helmet = require('helmet');
 
 class TCPServer {
@@ -48,7 +49,7 @@ class TCPServer {
                 res.header('Access-Control-Allow-Origin', 'http://localhost:4200');
                 res.header('Access-Control-Allow-Methods', 'GET, POST');
                 res.header('Access-Control-Allow-Headers', 'Content-Type');
-                res.header("Content-Security-Policy", "default-src 'none'; font-src 'self' https://example.com;");
+                res.header("Content-Security-Policy", "default-src 'none'; font-src 'self' https://e...content-available-to-author-only...e.com;");
                 next();
             });
 
@@ -61,12 +62,16 @@ class TCPServer {
                 let uploadDataFiles = [];
                 let audioChunksMap = new Map();
 
-                console.log('Client đã kết nối');
-
                 socket.on('login', (data) => {
+                    console.log('Client đã kết nối');
                     console.log(data.userId, socket.id);
                     currentUserId = data.userId;
                     this.users.set(data.userId, socket);
+                });
+
+                socket.on('logout', () => {
+                    console.log(`Client ${currentUserId} đã ngắt kết nối`);
+                    this.users.delete(currentUserId);
                 });
 
                 socket.on('addNewFriend', (data) => {
@@ -94,7 +99,6 @@ class TCPServer {
                     console.log('text: ', data);
                     firebaseService.saveMessageIntoDB(data.chatId, currentUserId, data.text, data.type)
                         .then((sendAt) => {
-                            console.log('Check text: ', sendAt);
                             if (sendAt) {
                                 this.sendDataToChatRoom(data.chatId, {
                                     fromUserId: currentUserId,
@@ -104,6 +108,16 @@ class TCPServer {
                                 });
                             }
                         });
+                });
+
+                socket.on('editMessageContent', (data) => {
+                    console.log('editMessageContent: ', data);
+                    firebaseService.editMessageContent(data.chatId, data.messageId, data.newContent);
+                });
+
+                socket.on('deleteMessage', (data) => {
+                    console.log('deleteMessage: ', data);
+                    firebaseService.deleteMessage(data.chatId, data.messageId);
                 });
 
                 socket.on('audio', (data) => {
@@ -130,7 +144,7 @@ class TCPServer {
                             console.log('send call-user');
                             socket.emit('callUser', { response: data });
                         }
-                    })
+                    });
                 });
 
                 socket.on('answerCall', (data) => {
@@ -143,10 +157,58 @@ class TCPServer {
                             socket.emit('callAccepted', { response: data });
                         }
                     });
-                })
+                });
+
+                socket.on('triggerMicrophone', (data) => {
+                    const socketToMute = data.chatUserIds.map((userId) => {
+                        return this.users.get(userId);
+                    });
+                    socketToMute.forEach((socket) => {
+                        if (socket) {
+                            console.log('send mute');
+                            socket.emit('triggerMicrophone', { response: data });
+                        }
+                    });
+                });
+
+                socket.on('triggerCamera', (data) => {
+                    const socketToOpenCam = data.chatUserIds.map((userId) => {
+                        return this.users.get(userId);
+                    });
+                    socketToOpenCam.forEach((socket) => {
+                        if (socket) {
+                            console.log('send OpenCam');
+                            socket.emit('triggerCamera', { response: data });
+                        }
+                    });
+                });
+
+                socket.on('triggerShareScreen', (data) => {
+                    const socketToShareScreen = data.chatUserIds.map((userId) => {
+                        return this.users.get(userId);
+                    });
+                    socketToShareScreen.forEach((socket) => {
+                        if (socket) {
+                            console.log('send ShareScreen');
+                            socket.emit('triggerShareScreen', { response: data });
+                        }
+                    });
+                });
+
+                socket.on('leaveCall', (data) => {
+                    const socketToLeaveCall = data.chatUserIds.map((userId) => {
+                        return this.users.get(userId);
+                    });
+                    socketToLeaveCall.forEach((socket) => {
+                        if (socket) {
+                            console.log('send leaveCall');
+                            socket.emit('leaveCall', { response: data });
+                        }
+                    });
+                });
 
                 socket.on('disconnect', () => {
-                    console.log('Client đã ngắt kết nối');
+                    console.log(`Client ${currentUserId} đã ngắt kết nối`);
                     this.users.delete(currentUserId);
                 });
             });
